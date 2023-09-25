@@ -397,14 +397,24 @@ class Message extends Base {
      */
     async forward(chat) {
         const chatId = typeof chat === 'string' ? chat : chat.id._serialized;
-
-        await this.client.pupPage.evaluate(async (msgId, chatId) => {
+        const forwardedMessageId = await this.client.pupPage.evaluate(async (msgId, chatId) => {
             let msg = window.Store.Msg.get(msgId);
             let chat = window.Store.Chat.get(chatId);
-            window.Store.Chat.forwardMessagesToChats([msg],[chat]);
-
-            // return await chat.forwardMessages([msg]);
+            await window.Store.Chat.forwardMessagesToChats([msg], [chat]);
+            const maxAttempts = 10; // Adjust as needed
+            let attempts = 0;
+            let newMsg = null;
+            while (attempts < maxAttempts) {
+                let updatedChat = window.Store.Chat.get(chatId);
+                newMsg = updatedChat.msgs._last;
+                if (newMsg && newMsg.id.fromMe && newMsg.body === msg.body) {
+                    return newMsg.id._serialized;
+                }
+                attempts++;
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait for 500ms before checking again
+            }
         }, this.id._serialized, chatId);
+        return forwardedMessageId;
     }
 
     /**
