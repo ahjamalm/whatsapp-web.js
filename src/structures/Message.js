@@ -408,7 +408,7 @@ class Message extends Base {
                 let updatedChat = window.Store.Chat.get(chatId);
                 newMsg = updatedChat.msgs._last;
                 if (newMsg && newMsg.id.fromMe && newMsg.body === msg.body) {
-                    return newMsg.id._serialized;
+                    return newMsg.id;
                 }
                 attempts++;
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for 500ms before checking again
