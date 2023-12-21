@@ -6,8 +6,8 @@ const Location = require('./Location');
 const Order = require('./Order');
 const Payment = require('./Payment');
 const Reaction = require('./Reaction');
-const {MessageTypes} = require('../util/Constants');
-const {Contact} = require('./Contact');
+const { MessageTypes } = require('../util/Constants');
+const { Contact } = require('./Contact');
 
 /**
  * Represents a Message on WhatsApp
@@ -22,13 +22,13 @@ class Message extends Base {
 
     _patch(data) {
         this._data = data;
-        
+
         /**
          * MediaKey that represents the sticker 'ID'
          * @type {string}
          */
         this.mediaKey = data.mediaKey;
-        
+
         /**
          * ID that represents the message
          * @type {object}
@@ -248,7 +248,7 @@ class Message extends Base {
         if (data.latestEditMsgKey) {
             this.latestEditMsgKey = data.latestEditMsgKey;
         }
-        
+
         /**
          * Links included in the message.
          * @type {Array<{link: string, isSuspicious: boolean}>}
@@ -300,12 +300,12 @@ class Message extends Base {
     async reload() {
         const newData = await this.client.pupPage.evaluate((msgId) => {
             const msg = window.Store.Msg.get(msgId);
-            if(!msg) return null;
+            if (!msg) return null;
             return window.WWebJS.getMessageModel(msg);
         }, this.id._serialized);
 
-        if(!newData) return null;
-        
+        if (!newData) return null;
+
         this._patch(newData);
         return this;
     }
@@ -317,7 +317,7 @@ class Message extends Base {
     get rawData() {
         return this._data;
     }
-    
+
     /**
      * Returns the Chat this message was sent in
      * @returns {Promise<Chat>}
@@ -386,10 +386,10 @@ class Message extends Base {
      * @param {string} reaction - Emoji to react with. Send an empty string to remove the reaction.
      * @return {Promise}
      */
-    async react(reaction){
+    async react(reaction) {
         await this.client.pupPage.evaluate(async (messageId, reaction) => {
             if (!messageId) { return undefined; }
-            
+
             const msg = await window.Store.Msg.get(messageId);
             await window.Store.sendReactionToMsg(msg, reaction);
         }, this.id._serialized, reaction);
@@ -404,17 +404,28 @@ class Message extends Base {
     }
 
     /**
-     * Forwards this message to another chat (that you chatted before, otherwise it will fail)
-     *
-     * @param {string|Chat} chat Chat model or chat ID to which the message will be forwarded
-     * @returns {Promise}
+     * Message forward options
+     * @typedef {Object} MessageForwardOptions
+     * @property {boolean} [withCaption=true] Forwards this message with the caption text of the original message if provided
+     * @property {?boolean} displayAsForwarded If false, the forwarded message will be displayed withour a 'Forwarded' tag, by default the default WhatsApp behavior is used
      */
-    async forward(chat) {
+
+    /**
+     * Forwards this message to another chat
+     * @param {string|Chat} chat Chat model or chat ID to which the message will be forwarded
+     * @param {?MessageForwardOptions} options Options used when forwarding the message
+     * @returns {Promise<boolean>} Returns true if a message was forwarded successfully, false otherwise
+     */
+    async forward(chat, options = {}) {
         const chatId = typeof chat === 'string' ? chat : chat.id._serialized;
-        const forwardedMessageId = await this.client.pupPage.evaluate(async (msgId, chatId) => {
-            let msg = window.Store.Msg.get(msgId);
-            let chat = window.Store.Chat.get(chatId);
-            await window.Store.Chat.forwardMessagesToChats([msg], [chat]);
+        const forwardedMessageId = await this.client.pupPage.evaluate(async (msgId, chatId, options) => {
+            const chatWid = window.Store.WidFactory.createWid(chatId);
+            const chat = await window.Store.Chat.find(chatWid);
+            const msg = window.Store.Msg.get(msgId);
+            if (!chat || !msg) return false;
+
+            // await window.Store.Chat.forwardMessagesToChats([msg], [chat]);
+            await await window.WWebJS.forwardMessage(chat, msg, options);
             const maxAttempts = 10; // Adjust as needed
             let attempts = 0;
             let newMsg = null;
@@ -427,7 +438,7 @@ class Message extends Base {
                 attempts++;
                 await new Promise(resolve => setTimeout(resolve, 500)); // Wait for 500ms before checking again
             }
-        }, this.id._serialized, chatId);
+        }, this.id._serialized, chatId, options);
         return forwardedMessageId;
     }
 
@@ -478,7 +489,7 @@ class Message extends Base {
                     filesize: msg.size
                 };
             } catch (e) {
-                if(e.status && e.status === 404) return undefined;
+                if (e.status && e.status === 404) return undefined;
                 throw e;
             }
         }, this.id._serialized);
@@ -495,7 +506,7 @@ class Message extends Base {
         await this.client.pupPage.evaluate(async (msgId, everyone) => {
             let msg = window.Store.Msg.get(msgId);
             let chat = await window.Store.Chat.find(msg.id.remote);
-            
+
             const canRevoke = window.Store.MsgActionChecks.canSenderRevokeMsg(msg) || window.Store.MsgActionChecks.canAdminRevokeMsg(msg);
             if (everyone && canRevoke) {
                 return window.Store.Cmd.sendRevokeMsgs(chat, [msg], { clearMedia: true, type: msg.id.fromMe ? 'Sender' : 'Admin' });
@@ -511,7 +522,7 @@ class Message extends Base {
     async star() {
         await this.client.pupPage.evaluate(async (msgId) => {
             let msg = window.Store.Msg.get(msgId);
-            
+
             if (window.Store.MsgActionChecks.canStarMsg(msg)) {
                 let chat = await window.Store.Chat.find(msg.id.remote);
                 return window.Store.Cmd.sendStarMsgs(chat, [msg], false);
@@ -581,7 +592,7 @@ class Message extends Base {
         if (this.type === MessageTypes.PAYMENT) {
             const msg = await this.client.pupPage.evaluate(async (msgId) => {
                 const msg = window.Store.Msg.get(msgId);
-                if(!msg) return null;
+                if (!msg) return null;
                 return msg.serialize();
             }, this.id._serialized);
             return new Payment(this.client, msg);
@@ -642,7 +653,7 @@ class Message extends Base {
             mentionedJidList: Array.isArray(options.mentions) ? options.mentions : [],
             extraOptions: options.extra
         };
-        
+
         if (!this.fromMe) {
             return null;
         }
