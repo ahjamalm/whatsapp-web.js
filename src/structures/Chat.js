@@ -183,6 +183,8 @@ class Chat extends Base {
      */
     async fetchMessages(searchOptions) {
         let messages = await this.client.pupPage.evaluate(async (chatId, searchOptions) => {
+            let chatWid = window.Store.WidFactory.createWid(chatId);
+
             const msgFilter = (m) => {
                 if (m.isNotification) {
                     return false; // dont include notification messages
@@ -193,7 +195,12 @@ class Chat extends Base {
                 return true;
             };
 
-            const chat = window.Store.Chat.get(chatId);
+            let chat = await window.Store.Chat.find(chatWid);
+            await window.Store.Cmd.openChatAt(chat);
+            await new Promise((resolve, reject) => setTimeout(() => {
+                resolve({})
+            }, 3000))
+
             let msgs = chat.msgs.getModelsArray().filter(msgFilter);
 
             if (searchOptions && searchOptions.limit > 0) {
